@@ -1,0 +1,16 @@
+# Render Blueprint: New + > Blueprint > pick this repo. Or create a Web Service by hand with the same commands.
+services:
+  - type: web
+    name: email-checker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # One worker on purpose: the rate limiter, the SMTP politeness delay and the port-25 probe
+    # cache all live in process memory. Threads give enough concurrency for a demo.
+    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: SMTP_MODE
+        value: auto          # auto = detect whether port 25 is open; Render's free tier blocks it
+      - key: VERIFY_MAIL_FROM
+        value: verify@example.com   # change to an address on a domain you own
