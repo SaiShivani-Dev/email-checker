@@ -1,1 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Deliverability Checker</title>
+<meta name="description" content="Paste a list of email addresses and see whether each one is likely to be delivered, likely to bounce, or unknown. No email is ever sent.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M7 11h18v11H7z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M7 12l9 7 9-7' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style nonce="{{ nonce }}">
+:root {
+  --bg: #f4f6f8; --card: #ffffff; --ink: #14202e; --muted: #5a6877; --line: #dfe5ec;
+  --brand: #0f766e; --brand-ink: #ffffff; --focus: #0f766e;
+  --ok-bg: #d9f3e4; --ok-ink: #0b5a2e;
+  --bad-bg: #fde1df; --bad-ink: #8c1d18;
+  --unk-bg: #fdf0cc; --unk-ink: #7a4b00;
+  --chip-bg: #eef2f6; --code-bg: #f0f3f7; --shadow: 0 1px 2px rgba(20,32,46,.06), 0 4px 16px rgba(20,32,46,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d141c; --card: #151f2b; --ink: #e8eef5; --muted: #98a6b5; --line: #263445;
+    --brand: #2dd4bf; --brand-ink: #062a27; --focus: #2dd4bf;
+    --ok-bg: #12382a; --ok-ink: #8de6b5;
+    --bad-bg: #432020; --bad-ink: #ffaaa3;
+    --unk-bg: #3f3318; --unk-ink: #f6cf7a;
+    --chip-bg: #1d2a38; --code-bg: #101a24; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1000px; margin: 0 auto; padding: 32px 16px 56px; }
+header { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
+.logo { width: 44px; height: 44px; flex: none; }
+h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; letter-spacing: -.01em; }
+.sub { color: var(--muted); margin: 4px 0 24px; max-width: 68ch; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+.card + .card, .banner + .card, .card + details { margin-top: 16px; }
+label { display: block; font-weight: 600; margin-bottom: 8px; }
+textarea {
+  width: 100%; min-height: 168px; resize: vertical; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--code-bg); color: var(--ink);
+  font: 15px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+textarea:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+.spacer { flex: 1 1 auto; }
+.counter { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.counter.over { color: var(--bad-ink); font-weight: 700; }
+button {
+  font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; padding: 10px 18px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+}
+button:hover:not(:disabled) { border-color: var(--brand); }
+button.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button:disabled { opacity: .55; cursor: not-allowed; }
+.spin { display: none; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; margin-left: 8px; vertical-align: -2px; animation: spin .7s linear infinite; }
+.loading .spin { display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2s; } }
+.hint { color: var(--muted); font-size: .9rem; margin: 10px 0 0; }
+.banner { border-radius: 12px; padding: 12px 16px; font-size: .95rem; border: 1px solid var(--line); background: var(--chip-bg); margin-bottom: 16px; }
+.banner[hidden] { display: none; }
+.banner.warn { background: var(--unk-bg); color: var(--unk-ink); border-color: transparent; }
+.banner.good { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
+.error { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--bad-bg); color: var(--bad-ink); font-weight: 600; }
+.error[hidden], #results[hidden] { display: none; }
+.summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px;
+  font-weight: 700; font-size: .88rem; white-space: nowrap;
+}
+.pill.delivered { background: var(--ok-bg); color: var(--ok-ink); }
+.pill.bounce { background: var(--bad-bg); color: var(--bad-ink); }
+.pill.unknown { background: var(--unk-bg); color: var(--unk-ink); }
+.summary .pill { font-size: .95rem; padding: 6px 14px; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.email { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92rem; overflow-wrap: anywhere; word-break: break-word; min-width: 160px; }
+td.reason .why { margin: 0 0 6px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: .78rem; padding: 2px 8px; border-radius: 6px; background: var(--chip-bg); color: var(--muted); white-space: nowrap; }
+.chip.pass { color: var(--ok-ink); }
+.chip.fail { color: var(--bad-ink); }
+.chip.unknown { color: var(--unk-ink); }
+.chip.flag { background: transparent; border: 1px solid var(--line); }
+.mx { color: var(--muted); font-size: .8rem; margin-top: 6px; overflow-wrap: anywhere; }
+.note { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--chip-bg); font-size: .93rem; color: var(--ink); }
+.note[hidden] { display: none; }
+details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 20px; }
+summary { cursor: pointer; font-weight: 600; padding: 14px 0; }
+details dl { margin: 0 0 14px; display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; align-items: start; }
+details dt { margin: 0; }
+details dd { margin: 0; color: var(--muted); }
+details p { color: var(--muted); margin: 0 0 14px; }
+footer { color: var(--muted); font-size: .88rem; margin-top: 24px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 720px) {
+  h1 { font-size: 1.4rem; }
+  table, thead, tbody, tr, td { display: block; width: 100%; }
+  thead { position: absolute; left: -9999px; }
+  tr { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  tr:last-child { border-bottom: 0; }
+  td { border: 0; padding: 4px 0; }
+  td.email { min-width: 0; }
+  details dl { grid-template-columns: 1fr; gap: 2px; }
+  details dd { margin-bottom: 10px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="logo" viewBox="0 0 32 32" role="img" aria-label="Envelope with a check mark">
+      <rect width="32" height="32" rx="8" fill="#0f766e"/>
+      <path d="M7 11h18v11H7z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M7 12l9 7 9-7" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+    <h1>Email Deliverability Checker</h1>
+  </header>
+  <p class="sub">Paste up to {{ max_emails }} email addresses. Each one is checked for syntax, typos, disposable domains and mail servers, and rated
+    <strong>likely to be delivered</strong>, <strong>likely to bounce</strong> or <strong>unknown</strong>. No email is ever sent.</p>
 
+  <div id="smtp-banner" class="banner" hidden></div>
+
+  <form class="card" id="form" novalidate data-max="{{ max_emails }}">
+    <label for="emails">Email addresses</label>
+    <textarea id="emails" name="emails" spellcheck="false" autocomplete="off" autocapitalize="off"
+              placeholder="one address per line (commas and spaces also work)&#10;test@gmail.com&#10;admin@mycollege.edu" aria-describedby="counter hint"></textarea>
+    <div class="row">
+      <button type="submit" class="primary" id="go"><span id="go-label">Check addresses</span><span class="spin" aria-hidden="true"></span></button>
+      <button type="button" id="example">Load example</button>
+      <button type="button" id="clear">Clear</button>
+      <span class="spacer"></span>
+      <span class="counter" id="counter" aria-live="polite">0 / {{ max_emails }}</span>
+    </div>
+    <p class="hint" id="hint">Tip: press Ctrl+Enter (or ⌘+Enter) to check. Duplicates are removed automatically.</p>
+    <div class="error" id="error" role="alert" hidden></div>
+  </form>
+
+  <section class="card" id="results" aria-live="polite" aria-label="Results" hidden>
+    <div class="summary" id="summary"></div>
+    <table>
+      <thead><tr><th scope="col">Email</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="note" id="unknown-note" hidden>
+      <strong>“Unknown” is an honest answer, not an error.</strong> Gmail, Yahoo, Outlook and many company mail systems
+      accept every address at the SMTP stage (or never answer) so that nobody can harvest their user lists. Guessing would be wrong,
+      so these are reported as unknown.
+    </div>
+    <div class="row">
+      <button type="button" id="csv">Download CSV</button>
+      <span class="counter" id="meta"></span>
+    </div>
+  </section>
+
+  <details>
+    <summary>How to read the results</summary>
+    <dl>
+      <dt><span class="pill delivered">✓ likely to be delivered</span></dt>
+      <dd>Syntax is valid, the domain has a mail server, and that server accepted the address (or accepts every address, i.e. a catch-all).</dd>
+      <dt><span class="pill bounce">✕ likely to bounce</span></dt>
+      <dd>Invalid syntax, a probable typo, a disposable domain, a domain with no mail server, or a server that explicitly says the mailbox does not exist.</dd>
+      <dt><span class="pill unknown">? unknown</span></dt>
+      <dd>The address looks fine, but nobody could confirm the mailbox: the provider hides it, the server was unreachable or gave a temporary answer, or SMTP checks are not possible from this host.</dd>
+    </dl>
+    <p>Checks run in order and stop at the first decisive one:
+      <strong>syntax → typo → disposable → DNS MX → provider rules → SMTP</strong>.
+      The SMTP step only asks “would you accept this recipient?” and disconnects. It never sends a message.</p>
+  </details>
+
+  <footer>Only the addresses you paste are checked, and they are not stored. Use this on addresses you are allowed to check.</footer>
+</div>
+
+<script nonce="{{ nonce }}">
+(function () {
+  "use strict";
+  var form = document.getElementById("form");
+  var MAX = parseInt(form.getAttribute("data-max"), 10) || 10;
+  var ta = document.getElementById("emails");
+  var go = document.getElementById("go");
+  var goLabel = document.getElementById("go-label");
+  var counter = document.getElementById("counter");
+  var errBox = document.getElementById("error");
+  var resultsEl = document.getElementById("results");
+  var rowsEl = document.getElementById("rows");
+  var summaryEl = document.getElementById("summary");
+  var metaEl = document.getElementById("meta");
+  var unknownNote = document.getElementById("unknown-note");
+  var banner = document.getElementById("smtp-banner");
+  var lastResults = [];
+  var busy = false;
+
+  var STATUS = {
+    "likely to be delivered": { cls: "delivered", icon: "✓" },
+    "likely to bounce": { cls: "bounce", icon: "✕" },
+    "unknown": { cls: "unknown", icon: "?" }
+  };
+  var CHECK_LABELS = { syntax: "Syntax", typo: "Typo", disposable: "Disposable", mx: "MX", smtp: "SMTP" };
+  var CHECK_ICONS = { pass: "✓", fail: "✕", unknown: "?", skipped: "–" };
+
+  function tokens() {
+    var seen = {}, out = [];
+    ta.value.split(/[\s,;]+/).forEach(function (t) {
+      t = t.replace(/^[<"']+|[>"']+$/g, "");
+      if (t && !seen[t.toLowerCase()]) { seen[t.toLowerCase()] = true; out.push(t); }
+    });
+    return out;
+  }
+
+  function updateCounter() {
+    var n = tokens().length;
+    counter.textContent = n + " / " + MAX;
+    counter.classList.toggle("over", n > MAX);
+    go.disabled = busy || n === 0 || n > MAX;
+    if (n > MAX) showError("Too many addresses: " + n + ". The limit is " + MAX + " per request."); else hideError();
+  }
+  function showError(msg) { errBox.textContent = msg; errBox.hidden = false; }
+  function hideError() { errBox.hidden = true; errBox.textContent = ""; }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function pill(status) {
+    var s = STATUS[status] || STATUS.unknown;
+    return el("span", "pill " + s.cls, s.icon + " " + status);
+  }
+
+  function render(data) {
+    lastResults = data.results;
+    var counts = { "likely to be delivered": 0, "likely to bounce": 0, "unknown": 0 };
+    rowsEl.textContent = "";
+    data.results.forEach(function (r) {
+      counts[r.status] = (counts[r.status] || 0) + 1;
+      var tr = el("tr");
+      tr.appendChild(el("td", "email", r.email));
+      var tdS = el("td"); tdS.appendChild(pill(r.status)); tr.appendChild(tdS);
+
+      var tdR = el("td", "reason");
+      tdR.appendChild(el("p", "why", r.reason));
+      var meta = el("div", "meta");
+      ["syntax", "typo", "disposable", "mx", "smtp"].forEach(function (k) {
+        if (!r.checks || !r.checks[k]) return;
+        var st = r.checks[k];
+        var c = el("span", "chip " + st, CHECK_ICONS[st] + " " + CHECK_LABELS[k] + (st === "skipped" ? " skipped" : ""));
+        c.title = CHECK_LABELS[k] + ": " + st;
+        meta.appendChild(c);
+      });
+      (r.flags || []).forEach(function (f) { meta.appendChild(el("span", "chip flag", f)); });
+      tdR.appendChild(meta);
+      if (r.mx) tdR.appendChild(el("div", "mx", "Mail server: " + r.mx));
+      tr.appendChild(tdR);
+      rowsEl.appendChild(tr);
+    });
+
+    summaryEl.textContent = "";
+    Object.keys(STATUS).forEach(function (k) {
+      var p = pill(k); p.textContent = STATUS[k].icon + " " + (counts[k] || 0) + " " + k; summaryEl.appendChild(p);
+    });
+    unknownNote.hidden = !counts.unknown;
+    var bits = [data.meta.count + " checked"];
+    if (data.meta.duplicates_removed) bits.push(data.meta.duplicates_removed + " duplicate(s) removed");
+    bits.push((data.meta.elapsed_ms / 1000).toFixed(1) + " s");
+    metaEl.textContent = bits.join(" · ");
+    resultsEl.hidden = false;
+    resultsEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function setBusy(on) {
+    busy = on;
+    form.classList.toggle("loading", on);
+    goLabel.textContent = on ? "Checking…" : "Check addresses";
+    go.setAttribute("aria-busy", on ? "true" : "false");
+    updateCounter();
+  }
+
+  function run() {
+    if (busy) return;
+    var list = tokens();
+    if (!list.length || list.length > MAX) return;
+    hideError(); setBusy(true);
+    fetch("/api/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emails: list })
+    }).then(function (resp) {
+      return resp.json().catch(function () { return { error: "The server sent an unexpected response." }; })
+        .then(function (data) { return { ok: resp.ok, data: data }; });
+    }).then(function (r) {
+      if (!r.ok) { showError(r.data.error || "Something went wrong."); return; }
+      render(r.data);
+    }).catch(function () {
+      showError("Could not reach the server. Check your connection and try again.");
+    }).then(function () { setBusy(false); });
+  }
+
+  function csvCell(v) {
+    v = String(v == null ? "" : v);
+    if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;            // stop spreadsheet formula injection
+    return '"' + v.replace(/"/g, '""') + '"';
+  }
+  document.getElementById("csv").addEventListener("click", function () {
+    var lines = [["Email", "Status", "Reason", "Flags", "Mail server"].map(csvCell).join(",")];
+    lastResults.forEach(function (r) {
+      lines.push([r.email, r.status, r.reason, (r.flags || []).join("; "), r.mx || ""].map(csvCell).join(","));
+    });
+    var blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "email-check-results.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+
+  form.addEventListener("submit", function (e) { e.preventDefault(); run(); });
+  ta.addEventListener("input", updateCounter);
+  ta.addEventListener("keydown", function (e) { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); run(); } });
+  document.getElementById("clear").addEventListener("click", function () { ta.value = ""; resultsEl.hidden = true; updateCounter(); ta.focus(); });
+  document.getElementById("example").addEventListener("click", function () {
+    ta.value = ["test@gmail.com", "invalid@@gmail.com", "no_such_user_12345@yahoo.com", "admin@mycollege.edu",
+                "test@gmai.com", "test@tempmail.com"].join("\n");
+    updateCounter(); ta.focus();
+  });
+
+  function loadStatus(attempt) {
+    fetch("/api/status").then(function (r) { return r.json(); }).then(function (s) {
+      var smtp = s.smtp || {};
+      if (smtp.state === "checking" && attempt < 6) { setTimeout(function () { loadStatus(attempt + 1); }, 2500); return; }
+      banner.hidden = false;
+      banner.className = "banner";
+      banner.textContent = "";
+      if (smtp.available === false) {
+        banner.classList.add("warn");
+        var b = el("strong", null, "Limited mode: ");
+        banner.appendChild(b);
+        banner.appendChild(document.createTextNode(
+          "this host cannot open outbound SMTP connections (port 25), so mailboxes cannot be probed. " +
+          "Results use syntax, typo, disposable-domain and DNS MX checks only; valid-looking addresses are reported as “unknown”."));
+      } else if (smtp.available === true) {
+        banner.classList.add("good");
+        banner.appendChild(el("strong", null, "Full mode: "));
+        banner.appendChild(document.createTextNode("SMTP mailbox probing is available on this host (no message is ever sent)."));
+      } else { banner.hidden = true; }
+    }).catch(function () { banner.hidden = true; });
+  }
+
+  updateCounter();
+  loadStatus(0);
+})();
+</script>
+</body>
+</html>
