@@ -246,6 +246,3 @@ https://github.com/SaiShivani-Dev/email-checker
 Author:
 
 M Sai Shivani
-
-
-This is clean, professional, includes your deployed URL, GitHub link, and satisfies the assignment requirements.
